@@ -326,16 +326,24 @@
             gap: 24px 30px;
             margin-bottom: 35px;
         }
+        .form-grid > .form-group {
+            min-width: 0; /* cegah 1 kolom "merebut" ruang kolom sebelahnya */
+        }
         .form-group {
             display: flex;
             flex-direction: column;
             gap: 8px;
+            min-width: 0;
         }
         
         .form-row-split {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
             gap: 15px;
+        }
+        .form-row-split > input,
+        .form-row-split > select {
+            min-width: 0; /* cegah kolom Tempat Lahir / Tinggi / RT menyusut tidak merata */
         }
         
         .form-group label {
@@ -487,9 +495,6 @@
                 gap: 20px;
                 align-items: flex-start;
             }
-            .form-grid {
-                grid-template-columns: 1fr;
-            }
             .navbar {
                 width: 90%;
                 padding: 5px 15px;
@@ -536,7 +541,34 @@
             .badge-container {
                 grid-template-columns: repeat(2, 1fr);
             }
-        } 
+
+            /* --- FIX: form tidak sempit di HP, tetap 2 kolom sejajar & sama lebar --- */
+            body {
+                padding: 5px 0 40px 0;
+            }
+            .register-container {
+                padding: 22px 16px;
+                border-radius: 18px;
+                width: 96%;
+            }
+            .form-grid {
+                gap: 18px 14px; /* jarak antar kolom dipersempit supaya 2 kolom tetap muat */
+            }
+            .form-group label {
+                font-size: 11px;
+            }
+            .form-group input,
+            .form-group select {
+                padding: 9px 10px;
+                font-size: 12px;
+            }
+
+            /* Khusus Tempat Lahir & Tanggal Lahir: ditumpuk, tempat di atas, tanggal di bawah */
+            .form-row-split.birth-split {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -643,7 +675,7 @@
 
                     <div class="form-group">
                         <label>Tempat, Tanggal Lahir<span>*</span></label>
-                        <div class="form-row-split">
+                        <div class="form-row-split birth-split">
                             <input type="text" id="input_tempat_lahir" placeholder="Tempat Lahir" required>
                             <input type="date" id="input_tanggal_lahir" required>
                         </div>
