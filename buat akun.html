@@ -417,6 +417,32 @@
             background-color: #012b2a;
         }
 
+        /* Kotak pesan (error / sukses) halaman daftar akun */
+        .akun-alert {
+            display: none;
+            margin-top: 20px;
+            padding: 12px 15px;
+            border-radius: 8px;
+            font-size: 13px;
+            line-height: 1.5;
+            border: 1px solid transparent;
+        }
+        .akun-alert.show { display: block; }
+        .akun-alert.error {
+            background-color: #fef2f2;
+            border-color: #fecaca;
+            color: #b91c1c;
+        }
+        .akun-alert.success {
+            background-color: #f0fdf4;
+            border-color: #bbf7d0;
+            color: #15803d;
+        }
+        .akun-alert a {
+            color: inherit;
+            font-weight: 700;
+        }
+
         @media (max-width: 768px) {
             .navbar {
                 width: 90%;
@@ -555,7 +581,7 @@
         <main>
             <div class="form-section-title">Data Akun</div>
             
-            <form action="#" method="POST">
+            <form action="#" method="POST" id="formBuatAkun">
                 <div class="form-grid" id="akunFieldsGrid">
                     <!-- Default Statis Form Password -->
                     <div class="form-control">
@@ -584,9 +610,12 @@
                     </div>
                 </div>
 
+                <!-- KOTAK PESAN PENDAFTARAN -->
+                <div id="akunAlert" class="akun-alert" role="alert"></div>
+
                 <div class="action-buttons">
                     <a href="index.html" class="btn-back">← Kembali</a>
-                    <a href="formulir.html" class="btn-next">Selanjutnya →</a>
+                    <button type="submit" class="btn-next">Selanjutnya →</button>
                 </div>
             </form>
         </main>
@@ -720,6 +749,115 @@
             }
         }
     })();
+</script>
+
+<script>
+/* ==========================================================================
+   SIMPAN AKUN SISWA  (localStorage: 'akun_spmb')
+   --------------------------------------------------------------------------
+   Sebelumnya tombol "Selanjutnya" hanya link biasa, sehingga data akun yang
+   diisi siswa TIDAK PERNAH tersimpan. Akibatnya halaman log-in tidak punya
+   data apa pun untuk dicocokkan dan siswa selalu gagal masuk.
+   ========================================================================== */
+(function () {
+    const KEY_AKUN  = 'akun_spmb';
+    const KEY_SESI  = 'sesi_login';
+
+    const form  = document.getElementById('formBuatAkun');
+    const alertBox = document.getElementById('akunAlert');
+    if (!form) return;
+
+    function tampilPesan(tipe, html) {
+        if (!alertBox) { alert(html.replace(/<[^>]*>/g, '')); return; }
+        alertBox.className = 'akun-alert show ' + tipe;
+        alertBox.innerHTML = html;
+        alertBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    /* Ambil field berdasarkan id, kalau tidak ada cari lewat teks label.
+       Ini penting karena field bisa diganti-ganti dari CMS. */
+    function ambilField(idUtama, kataKunci) {
+        let el = document.getElementById(idUtama);
+        if (el) return el;
+        const labels = document.querySelectorAll('#akunFieldsGrid label');
+        for (const lab of labels) {
+            if (lab.textContent.toLowerCase().includes(kataKunci)) {
+                const target = lab.getAttribute('for');
+                if (target) { el = document.getElementById(target); if (el) return el; }
+                const sib = lab.parentElement && lab.parentElement.querySelector('input, select, textarea');
+                if (sib) return sib;
+            }
+        }
+        return null;
+    }
+
+    const hanyaAngka = (s) => String(s || '').replace(/[^0-9]/g, '');
+
+    function bacaAkun() {
+        try { return JSON.parse(localStorage.getItem(KEY_AKUN)) || []; }
+        catch (e) { return []; }
+    }
+
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+
+        const elNama = ambilField('input_nama_lengkap', 'nama');
+        const elEmail = ambilField('input_email', 'email');
+        const elHp   = ambilField('input_nomor_whatsapp', 'whatsapp') || ambilField('input_nomor_hp', 'hp');
+        const elPass = ambilField('input_password', 'password');
+
+        const nama  = elNama  ? elNama.value.trim()  : '';
+        const email = elEmail ? elEmail.value.trim() : '';
+        const hp    = elHp    ? hanyaAngka(elHp.value) : '';
+        const pass  = elPass  ? elPass.value : '';
+
+        /* ---------- VALIDASI ---------- */
+        if (!nama || !email || !pass) {
+            tampilPesan('error', '<strong>Data belum lengkap.</strong> Nama lengkap, email, dan password wajib diisi.');
+            return;
+        }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            tampilPesan('error', '<strong>Format email tidak valid.</strong> Contoh penulisan yang benar: nama@gmail.com');
+            return;
+        }
+        if (pass.length < 6) {
+            tampilPesan('error', '<strong>Password terlalu pendek.</strong> Gunakan minimal 6 karakter.');
+            return;
+        }
+
+        const daftarAkun = bacaAkun();
+        const sudahAda = daftarAkun.some(a =>
+            (a.email && a.email.toLowerCase() === email.toLowerCase()) ||
+            (hp && a.hp && a.hp === hp)
+        );
+        if (sudahAda) {
+            tampilPesan('error',
+                '<strong>Akun sudah terdaftar.</strong> Email atau nomor WhatsApp ini sudah pernah digunakan. ' +
+                'Silakan <a href="log-in.html">masuk di halaman Log in</a>.');
+            return;
+        }
+
+        /* ---------- SIMPAN ---------- */
+        const akunBaru = {
+            id: 'AKUN-' + Date.now(),
+            nama: nama,
+            email: email,
+            hp: hp,
+            password: pass,
+            dibuat: new Date().toISOString()
+        };
+        daftarAkun.push(akunBaru);
+        localStorage.setItem(KEY_AKUN, JSON.stringify(daftarAkun));
+
+        /* Langsung login-kan siswa setelah daftar */
+        localStorage.setItem(KEY_SESI, JSON.stringify({
+            id: akunBaru.id, nama: akunBaru.nama, email: akunBaru.email, waktu: Date.now()
+        }));
+
+        tampilPesan('success', '<strong>Akun berhasil dibuat.</strong> Mengalihkan ke halaman formulir...');
+        setTimeout(function () { window.location.href = 'formulir.html'; }, 1200);
+    });
+})();
 </script>
 </body>
 </html>

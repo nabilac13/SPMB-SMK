@@ -151,6 +151,46 @@
             transition: background 0.2s;
         }
         .btn-submit:hover { background-color: #02403f; }
+
+        /* ---------- Kotak Peringatan Login ---------- */
+        .login-alert {
+            display: none;
+            text-align: left;
+            margin-bottom: 18px;
+            padding: 12px 14px;
+            border-radius: 8px;
+            font-size: 12.5px;
+            line-height: 1.5;
+            border: 1px solid transparent;
+        }
+        .login-alert.show { display: block; }
+        .login-alert.error {
+            background-color: #fef2f2;
+            border-color: #fecaca;
+            color: #b91c1c;
+        }
+        .login-alert.warning {
+            background-color: #fffbeb;
+            border-color: #fde68a;
+            color: #b45309;
+        }
+        .login-alert.success {
+            background-color: #f0fdf4;
+            border-color: #bbf7d0;
+            color: #15803d;
+        }
+        .login-alert .alert-action {
+            display: inline-block;
+            margin-top: 8px;
+            padding: 7px 14px;
+            border-radius: 6px;
+            background-color: #007a53;
+            color: #ffffff;
+            font-size: 12px;
+            font-weight: 700;
+            text-decoration: none;
+        }
+        .login-alert .alert-action:hover { background-color: #02403f; }
         .btn-submit svg { width: 18px; height: 18px; }
 
         .login-separator {
@@ -240,7 +280,10 @@
         <h1 id="lgJudulTxt">Selamat Datang</h1>
         <p id="lgSubTxt">Masuk untuk melanjutkan ke sistem penerimaan peserta didik baru</p>
         
-        <form action="formulir.html" id="main-login-form">
+        <!-- KOTAK PERINGATAN LOGIN -->
+        <div id="login-alert" class="login-alert" role="alert"></div>
+
+        <form id="main-login-form" novalidate>
             
             <div class="form-group dynamic-field" id="field-nama-lengkap">
                 <label>Nama Lengkap</label>
@@ -250,12 +293,12 @@
             </div>
 
             <div class="form-group">
-                <label id="label-username">Username</label>
+                <label id="label-username">Email / No. WhatsApp</label>
                 <div class="input-wrapper has-left-icon">
                     <svg class="input-icon-left" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
                     </svg>
-                    <input type="text" id="input_user_credential" placeholder="Masukkan username" required>
+                    <input type="text" id="input_user_credential" placeholder="Masukkan email atau no. WhatsApp" required>
                 </div>
             </div>
             
@@ -311,6 +354,155 @@
             this.style.opacity = type === 'text' ? '0.5' : '1';
         });
     </script>
+
+<script>
+/* ==========================================================================
+   PROSES LOGIN  (mencocokkan dengan akun di localStorage 'akun_spmb')
+   --------------------------------------------------------------------------
+   Sebelumnya form ini langsung mengarah ke formulir.html tanpa pengecekan
+   apa pun. Sekarang setiap percobaan masuk diverifikasi dulu:
+     - akun tidak ditemukan  -> peringatan "belum punya akun" + tombol daftar
+     - password salah        -> peringatan password salah
+     - cocok                 -> sesi disimpan, lanjut ke formulir
+   ========================================================================== */
+(function () {
+    const KEY_AKUN = 'akun_spmb';
+    const KEY_SESI = 'sesi_login';
+    const HALAMAN_DAFTAR    = 'buat akun.html';
+    const HALAMAN_FORMULIR  = 'formulir.html';
+    const HALAMAN_DASHBOARD = 'biodata_siswa.html';
+
+    const form     = document.getElementById('main-login-form');
+    const alertBox = document.getElementById('login-alert');
+    const inputUser = document.getElementById('input_user_credential');
+    const inputPass = document.getElementById('login-password');
+    if (!form) return;
+
+    function tampilPesan(tipe, html) {
+        if (!alertBox) { alert(html.replace(/<[^>]*>/g, '')); return; }
+        alertBox.className = 'login-alert show ' + tipe;
+        alertBox.innerHTML = html;
+    }
+    function sembunyikanPesan() {
+        if (alertBox) alertBox.className = 'login-alert';
+    }
+
+    const hanyaAngka = (s) => String(s || '').replace(/[^0-9]/g, '');
+
+    function bacaAkun() {
+        try { return JSON.parse(localStorage.getItem(KEY_AKUN)) || []; }
+        catch (e) { return []; }
+    }
+
+    /* Siswa boleh masuk pakai email, nomor WhatsApp, atau nama lengkap */
+    function samaHp(a, b) {
+        if (!a || !b) return false;
+        /* samakan 0812... dengan 62812... dan +62812... */
+        const norm = (n) => n.replace(/^0/, '').replace(/^62/, '');
+        return norm(a) === norm(b);
+    }
+
+    function cariAkun(kredensial) {
+        const q = kredensial.trim().toLowerCase();
+        const qAngka = hanyaAngka(kredensial);
+        return bacaAkun().find(a =>
+            (a.email && a.email.trim().toLowerCase() === q) ||
+            (a.nama  && a.nama.trim().toLowerCase()  === q) ||
+            samaHp(qAngka, a.hp)
+        ) || null;
+    }
+
+    /* Sudah pernah isi formulir? Dicek dari 'list_pendaftar' (data yang tersimpan
+       saat formulir.html disubmit). Cocokkan lewat akunId; untuk data lama yang
+       dibuat sebelum penautan ini ada, fallback cocokkan lewat email/HP. */
+    function sudahIsiFormulir(akun) {
+        let daftar = [];
+        try { daftar = JSON.parse(localStorage.getItem('list_pendaftar')) || []; }
+        catch (e) { return false; }
+        return daftar.some(p =>
+            (p.akunId && p.akunId === akun.id) ||
+            (p.hp && akun.hp && hanyaAngka(p.hp) === akun.hp)
+        );
+    }
+
+    /* ----------------------------------------------------------------------
+       MODE PEMERIKSAAN — buka log-in.html?debug=1 untuk melihat isi
+       penyimpanan browser. Berguna untuk memastikan akun benar-benar ada
+       di alamat (origin) yang sama. Blok ini aman dihapus nanti.
+       ---------------------------------------------------------------------- */
+    if (location.search.indexOf('debug') !== -1) {
+        const akunTersimpan = bacaAkun();
+        const kotak = document.createElement('div');
+        kotak.style.cssText = 'text-align:left;margin-bottom:18px;padding:12px;border-radius:8px;' +
+            'background:#f1f5f9;border:1px solid #cbd5e1;font-size:11px;color:#334155;word-break:break-all;';
+        kotak.innerHTML =
+            '<strong>MODE PEMERIKSAAN</strong><br>' +
+            'Alamat halaman: <code>' + location.origin + '</code><br>' +
+            'Jumlah akun tersimpan: <strong>' + akunTersimpan.length + '</strong><br>' +
+            (akunTersimpan.length
+                ? 'Email terdaftar: ' + akunTersimpan.map(a => a.email + ' (HP: ' + a.hp + ')').join(', ')
+                : 'Belum ada akun di alamat ini.');
+        const wadah = document.querySelector('.login-container');
+        if (wadah && alertBox) wadah.insertBefore(kotak, alertBox);
+    }
+
+    [inputUser, inputPass].forEach(el => {
+        if (el) el.addEventListener('input', sembunyikanPesan);
+    });
+
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+
+        const kredensial = inputUser ? inputUser.value.trim() : '';
+        const password   = inputPass ? inputPass.value : '';
+
+        if (!kredensial || !password) {
+            tampilPesan('error', '<strong>Lengkapi data login.</strong> Email/No. WhatsApp dan password harus diisi.');
+            return;
+        }
+
+        const daftarAkun = bacaAkun();
+
+        /* Kasus 1: belum ada akun sama sekali di perangkat ini */
+        if (daftarAkun.length === 0) {
+            tampilPesan('warning',
+                '<strong>Belum ada akun terdaftar.</strong><br>' +
+                'Anda harus membuat akun terlebih dahulu sebelum dapat masuk ke sistem SPMB.' +
+                '<br><a href="' + HALAMAN_DAFTAR + '" class="alert-action">Daftar Akun Sekarang →</a>');
+            return;
+        }
+        const akun = cariAkun(kredensial);
+
+        /* Kasus 2: akun tidak ditemukan */
+        if (!akun) {
+            tampilPesan('warning',
+                '<strong>Akun tidak ditemukan.</strong><br>' +
+                'Email atau nomor WhatsApp <em>' + kredensial.replace(/[<>]/g, '') + '</em> belum terdaftar. ' +
+                'Silakan daftar terlebih dahulu, atau periksa kembali penulisannya.' +
+                '<br><a href="' + HALAMAN_DAFTAR + '" class="alert-action">Daftar Akun Sekarang →</a>');
+            return;
+        }
+
+        /* Kasus 3: akun ada tapi password salah */
+        if (akun.password !== password) {
+            tampilPesan('error',
+                '<strong>Password salah.</strong> Periksa kembali password Anda, ' +
+                'atau gunakan tautan "Lupa Password?" untuk menghubungi panitia.');
+            if (inputPass) { inputPass.value = ''; inputPass.focus(); }
+            return;
+        }
+
+        /* Kasus 4: berhasil */
+        localStorage.setItem(KEY_SESI, JSON.stringify({
+            id: akun.id, nama: akun.nama, email: akun.email, waktu: Date.now()
+        }));
+        const tujuan = sudahIsiFormulir(akun) ? HALAMAN_DASHBOARD : HALAMAN_FORMULIR;
+        tampilPesan('success', '<strong>Login berhasil.</strong> Selamat datang, ' +
+            akun.nama.replace(/[<>]/g, '') + '. Mengalihkan...');
+        setTimeout(function () { window.location.href = tujuan; }, 1000);
+    });
+})();
+</script>
 
 <script>
 /* ==========================================================================

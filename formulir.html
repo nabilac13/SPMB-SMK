@@ -700,7 +700,9 @@
 
                     <div class="form-group">
                         <label>Nilai Rata-rata Raport<span>*</span></label>
-                        <input type="number" id="input_nilai_rata_rata" step="0.01" min="0" max="100" placeholder="cth. 85.50" required>
+                        <!-- Diubah dari type="number" ke type="text" karena kolom di database
+                             bertipe VARCHAR, sehingga nilai huruf (A, B+, Amat Baik) juga diterima. -->
+                        <input type="text" id="input_nilai_rata_rata" maxlength="20" placeholder="cth. 85.50 atau A" required>
                     </div>
 
                     <div class="form-group">
@@ -1373,14 +1375,24 @@
                 const studentId = existingData.id || (existingAdminRecord && existingAdminRecord.id) || "SISWA-" + Date.now();
                 const noRegNumber = existingData.noReg || (existingAdminRecord && existingAdminRecord.noReg) || "SPMB-2027-" + Math.floor(1000 + Math.random() * 9000);
 
+                // TAUTKAN FORMULIR KE AKUN: supaya saat login lagi, sistem tahu siswa ini
+                // sudah pernah isi formulir dan bisa langsung diarahkan ke dashboard
+                // (biodata_siswa.html) alih-alih disuruh isi formulir dari awal lagi.
+                let akunIdSaatIni = existingData.akunId || (existingAdminRecord && existingAdminRecord.akunId) || null;
+                try {
+                    const sesi = JSON.parse(localStorage.getItem('sesi_login'));
+                    if (sesi && sesi.id) akunIdSaatIni = sesi.id;
+                } catch (e) {}
+
                 const dataPendaftaran = {
                     id: studentId,
+                    akunId: akunIdSaatIni,
                     noReg: noRegNumber,
                     tglDaftar: existingData.tglDaftar || tglDaftarFormat,
                     status: existingData.status || "Menunggu Verifikasi",
                     nama: document.getElementById('input_nama_lengkap_calon_siswa').value,
                     asalSekolah: document.getElementById('input_asal_sekolah').value,
-                    nilaiRataRata: document.getElementById('input_nilai_rata_rata').value,
+                    nilaiRataRata: document.getElementById('input_nilai_rata_rata').value.trim(),
                     nisn: document.getElementById('input_NISN').value,
                     hp: document.getElementById('input_nomor_hp_siswa').value,
                     tempatLahir: document.getElementById('input_tempat_lahir').value,

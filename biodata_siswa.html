@@ -4,6 +4,40 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Profil Pendaftar — SMK Ma'arif Walisongo Kajoran</title>
+    <script>
+    /* ==========================================================================
+       GUARD AKSES DASHBOARD SISWA
+       Halaman ini cuma boleh dibuka kalau:
+       1. Ada sesi login yang valid (localStorage 'sesi_login') -> kalau tidak
+          ada, berarti belum login sama sekali -> lempar ke log-in.html.
+       2. Akun yang login itu sudah pernah submit formulir pendaftaran (dicek
+          dari 'list_pendaftar', dicocokkan lewat akunId) -> kalau belum,
+          berarti baru daftar akun tapi belum isi formulir -> lempar ke
+          formulir.html, bukan dibiarkan lihat dashboard yang datanya kosong.
+       Dijalankan sesegera mungkin (di <head>, sebelum body dirender) supaya
+       orang yang buka halaman ini langsung dari address bar tanpa login tidak
+       sempat melihat isinya walau sekilas.
+       ========================================================================== */
+    (function () {
+        let sesi = null;
+        try { sesi = JSON.parse(localStorage.getItem('sesi_login')); } catch (e) { sesi = null; }
+
+        if (!sesi || !sesi.id) {
+            window.location.replace('log-in.html');
+            return;
+        }
+
+        let sudahIsiFormulir = false;
+        try {
+            const listPendaftar = JSON.parse(localStorage.getItem('list_pendaftar')) || [];
+            sudahIsiFormulir = listPendaftar.some(p => p.akunId && p.akunId === sesi.id);
+        } catch (e) { sudahIsiFormulir = false; }
+
+        if (!sudahIsiFormulir) {
+            window.location.replace('formulir.html');
+        }
+    })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Sora:wght@600;700;800&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -1071,6 +1105,10 @@
 
         function logoutSystem() {
             if (confirm("Apakah Anda yakin ingin keluar dari sistem?")) {
+                // Hapus sesi login saja (bukan akun_spmb / data_pendaftaran), supaya
+                // kalau akun ini login lagi nanti, sistem masih ingat bahwa akun ini
+                // sudah pernah isi formulir dan langsung diarahkan ke dashboard lagi.
+                localStorage.removeItem('sesi_login');
                 window.location.href = "log-in.html";
             }
         }
